@@ -1,0 +1,3 @@
+Creating a Swap Pool
+Creating swap pools with the SPL Token Swap Program really showcases the account, instruction, and authorization models on Solana. This lesson will combine and build on top of a lot of what we have learned so far in the course. For operations specific to the Token Swap Program, we'll use the @solana/spl-token-swap` library.
+As we talk through creating a swap pool, we'll assume we're creating a swap pool for two tokens named Token A and Token B. Creating the swap pool with the spl-token-swap library is as simple as sending a transaction with an instruction created with the TokenSwap.createInitSwapInstruction` function. However, there are a number of accounts you need to create or derive beforehand that will be needed when creating that instruction:
