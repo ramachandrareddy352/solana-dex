@@ -13,26 +13,26 @@ async function main() {
     const connection = new Connection("https://api.devnet.solana.com");
 
     const wallet = loadKeypair('RCRs8L3xnMzW14pBcK8atHc85PRVyvoKmCVQE6JhLFm.json');
-    console.log(`Present our wallet public key => ${wallet.publicKey.toBase58()}`)
+    // console.log(`Present our wallet public key => ${wallet.publicKey.toBase58()}`)
     let transaction = new Transaction();
 
     // owner of lp tokens
     // tokenSwapStateAccount have to sign, so its require some sol to make transactions
     const tokenSwapStateAccount = loadKeypair('TSAFWrLukvBDm28J1DVEN7SGt2vX9aNUktY4LSzTZiC.json');
-    console.log(`Token swap account => ${tokenSwapStateAccount.publicKey.toBase58()}`)
+    // console.log(`Token swap account => ${tokenSwapStateAccount.publicKey.toBase58()}`)
 
     const rent = await TokenSwap.getMinBalanceRentForExemptTokenSwap(connection); 
 
     // to create a swap pool first we have to create a token swpa account which saves the information data of pool in this account
-    const tokenSwapStateAccountCreationInstruction = SystemProgram.createAccount({ 
-        newAccountPubkey: tokenSwapStateAccount.publicKey,
-        fromPubkey: wallet.publicKey,
-        lamports: rent,
-        space: TokenSwapLayout.span, 
-        programId: TOKEN_SWAP_PROGRAM_ID
-    })
+    // const tokenSwapStateAccountCreationInstruction = SystemProgram.createAccount({ 
+    //     newAccountPubkey: tokenSwapStateAccount.publicKey,
+    //     fromPubkey: wallet.publicKey,
+    //     lamports: rent,
+    //     space: TokenSwapLayout.span, 
+    //     programId: TOKEN_SWAP_PROGRAM_ID
+    // })
 
-    transaction.add(tokenSwapStateAccountCreationInstruction);
+    // transaction.add(tokenSwapStateAccountCreationInstruction);
 
     //
     const [swapAuthority, bump] = PublicKey.findProgramAddressSync(
@@ -46,8 +46,8 @@ async function main() {
     // spl-token create-token ATKpN4HUmKxoVRZfZQ7jJDKNifEm3LyBmi7QBnT5ptkS.json   => create the account
     const tokenAMint = new PublicKey('ATKpN4HUmKxoVRZfZQ7jJDKNifEm3LyBmi7QBnT5ptkS');
     const tokenBMint = new PublicKey('BTKqq9EqS8YXUtFZH4dSdoY6yVMuzQSy4xx48Xg7yBNz');
-    console.log(`Token-A mint address => ${tokenAMint.toBase58()}`);
-    console.log(`Token-B mint address => ${tokenBMint.toBase58()}`);
+    // console.log(`Token-A mint address => ${tokenAMint.toBase58()}`);
+    // console.log(`Token-B mint address => ${tokenBMint.toBase58()}`);
 
     //  which holds the tokens A & B when we provde the liquidity, the owner of this accounts is swap authority
     const tokenATokenAccount = await token.getAssociatedTokenAddress(
@@ -79,15 +79,20 @@ async function main() {
     transaction.add(tokenAAccountInstruction);
     transaction.add(tokenBAccountInstruction);
 
-    const sig = await connection.sendTransaction(transaction, [wallet, tokenSwapStateAccount]);
-    console.log(sig);
+    // try {
+    //     const signature = await connection.sendTransaction(transaction, [wallet]);
+    //     console.log('Transaction successful:', signature);
+    // } catch (error) {
+    //     console.error('Transaction simulation failed:', error.message);
+    // }
 
-    transaction = new Transaction();
+    // transaction = new Transaction();
     // this lp token is created and set the owner as `swapAuthority` address
     const poolTokenMint = new PublicKey('LPTuREAaGJpFirvsjF1Q5dgqjZwgFRDTC4HYD4V2Ym6');
 
     // create a associated pool token account to add initial liquidity to it for some security purpose
-    const poolTokenAccount = loadKeypair('TAPrHismcGsw7h4kvKkXhAS1y35Wv1dMRyPNmjYRGtr.sjon');
+    const poolTokenAccount = Keypair.generate();
+    // const poolTokenAccount = loadKeypair('TAPrHismcGsw7h4kvKkXhAS1y35Wv1dMRyPNmjYRGtr.json');
     const poolAccountRent = await token.getMinimumBalanceForRentExemptAccount(connection);
 
     const createTokenAccountPoolInstruction = SystemProgram.createAccount({
@@ -106,6 +111,8 @@ async function main() {
     transaction.add(createTokenAccountPoolInstruction);
     transaction.add(initializeTokenAccountPoolInstruction)
 
+    console.log("Pool token associated accont => ", poolTokenAccount.publicKey.toBase58());
+
     // token pool fee receiver account
     const feeOwner = new PublicKey('HfoTxFR1Tm6kGmWgYWD6J7YHVY1UwqSULUGVLXkJqaKN'); // who?, why?
     let tokenFeeAccountAddress = await token.getAssociatedTokenAddress(
@@ -120,6 +127,7 @@ async function main() {
         poolTokenMint  // mint
     )
     transaction.add(tokenFeeAccountInstruction)
+    // console.log(`token Fee Account Address => ${tokenFeeAccountAddress.toBase58()}`);
 
     // ----- CREATE SWAP POOL ----- //
     const tokenSwapInitSwapInstruction = TokenSwap.createInitSwapInstruction(
@@ -145,7 +153,58 @@ async function main() {
     
     transaction.add(tokenSwapInitSwapInstruction);
 
-    const swapPoolCreateSignature = await connection.sendTransaction(transaction, [wallet, poolTokenAccount]);
+    try {
+        const signature = await connection.sendTransaction(transaction, [wallet, poolTokenAccount ]);
+        console.log('Transaction successful:', signature);
+    } catch (error) {
+        console.error('Transaction simulation failed:', error.message);
+    }
+
+    transaction = new Transaction(); // new
+
+    const alice = loadKeypair('AcebScw2jTuH1L6zXLkrr6xFid2ChUUwTTU623dzwePZ.json');
+    const aliceAsscotiatedTokenA = await token.getOrCreateAssociatedTokenAccount(
+        connection,
+        wallet,
+        tokenAMint,
+        alice.publicKey,
+    )
+    const aliceAsscotiatedTokenB = await token.getOrCreateAssociatedTokenAccount(
+        connection,
+        wallet,
+        tokenBMint,
+        alice.publicKey,
+    )
+
+    // ----- SWAP TOKENS ----- //
+    const tokenSwapSwapInstruction = TokenSwap.swapInstruction(
+        tokenSwapStateAccount.publicKey,
+        swapAuthority,
+        alice.publicKey, 
+        aliceAsscotiatedTokenA.address,   // Mint some token-A tokens to alice 
+        tokenATokenAccount,  // sender source = pool's token destination token
+        tokenBTokenAccount, 
+        aliceAsscotiatedTokenB.address, 
+        poolTokenMint,
+        tokenFeeAccountAddress,
+        null,
+        tokenAMint,
+        tokenBMint,
+        TOKEN_SWAP_PROGRAM_ID,
+        token.TOKEN_PROGRAM_ID,
+        token.TOKEN_PROGRAM_ID,
+        token.TOKEN_PROGRAM_ID,
+        BigInt(10000),
+        BigInt(1)
+    )
+    transaction.add(tokenSwapSwapInstruction);
+
+    try {
+        const signature = await connection.sendTransaction(transaction, [alice]);
+        console.log('Transaction successful:', signature);
+    } catch (error) {
+        console.error('Transaction simulation failed:', error.message);
+    }
 }
 
 main()
