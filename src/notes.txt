@@ -1,0 +1,3 @@
+1) Mint authority of LP(pool tokens) is `swapAuthority`
+2) create a associated `tokenAccountPool` to add initial liquidity to it for some security purpose
+3) mintA & mintB mint authority is `owner`
